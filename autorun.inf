@@ -1,0 +1,5 @@
+[autorun]
+open=AUTO-INSTALL.bat
+icon=jamb.ico
+label=JAMB AUTOBOT Installer
+action=Install JAMB AUTOBOT Browser
