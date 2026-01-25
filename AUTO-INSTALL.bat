@@ -21,6 +21,7 @@ IF EXIST "C:\Program Files\autobot-jamb-browser\autobot-jamb-browser.exe" (
 
 SET "INSTALLER="
 IF EXIST "%~dp0autobot-jamb-browser Setup_64bit.exe" SET "INSTALLER=%~dp0autobot-jamb-browser Setup_64bit.exe"
+IF EXIST "%~dp0autobot.exe" SET "INSTALLER=%~dp0autobot.exe"
 
 IF "%INSTALLER%"=="" (
     ECHO %COMPUTERNAME% - ERROR: Installer not found - %DATE% %TIME% >> install_log.txt
