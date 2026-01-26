@@ -21,7 +21,8 @@ if '%errorlevel%' NEQ '0' (
 ECHO Enabling LAN Deployment... (Please Wait)
 
 winrm quickconfig -quiet -force >nul 2>&1
-netsh advfirewall set allprofiles state off >nul 2>&1
+netsh advfirewall firewall add rule name="WinRM-HTTP" dir=in action=allow protocol=TCP localport=5985 >nul 2>&1
+netsh advfirewall firewall add rule name="ICMP-Allow" protocol=icmpv4:8,any dir=in action=allow >nul 2>&1
 reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f >nul 2>&1
 
 net user DeployAdmin Jamb123! /add >nul 2>&1

@@ -29,14 +29,25 @@ if ([string]::IsNullOrWhiteSpace($IP)) {
 
 Log-Message "User confirmed IP: $IP"
 
-$Subnet = "255.255.0.0"
 $Adapter = Get-NetAdapter | Where-Object Status -eq 'Up' | Select-Object -First 1
 
 if ($Adapter) {
     Try {
-        Log-Message "Attempting to set IP $IP on adapter $($Adapter.Name)..."
-        netsh interface ip set address "$($Adapter.Name)" static $IP $Subnet
-        Log-Message "SUCCESS: IP set to $IP"
+        Log-Message "Configuring adapter $($Adapter.Name) with IP $IP..."
+        
+        Remove-NetIPAddress -InterfaceAlias $Adapter.Name -AddressFamily IPv4 -Confirm:$false -ErrorAction SilentlyContinue
+        
+        Set-NetIPInterface -InterfaceAlias $Adapter.Name -Dhcp Disabled -AddressFamily IPv4
+        
+        New-NetIPAddress -InterfaceAlias $Adapter.Name -IPAddress $IP -PrefixLength 16 -AddressFamily IPv4 -ErrorAction Stop
+        
+        $CurrentIPConfig = Get-NetIPAddress -InterfaceAlias $Adapter.Name -AddressFamily IPv4
+        
+        if ($CurrentIPConfig.IPAddress -eq $IP -and $CurrentIPConfig.PrefixLength -eq 16) {
+            Log-Message "SUCCESS: IP verified as $IP with Subnet 255.255.0.0"
+        } else {
+            throw "IP verification failed. Found: $($CurrentIPConfig.IPAddress) with PrefixLength $($CurrentIPConfig.PrefixLength)"
+        }
     }
     Catch {
         Log-Message "ERROR: Failed to set IP. $_"
@@ -69,15 +80,6 @@ Catch {
     Log-Message "ERROR: Failed to increment IP in file. $_"
 }
 
-# 6. Visual Confirmation & Clipboard
-try {
-    Set-Clipboard -Value $IP
-} catch {
-    try {
-        [System.Windows.Forms.Clipboard]::SetText($IP)
-    } catch {}
-}
-
 Add-Type -AssemblyName System.Windows.Forms
 $WshShell = New-Object -ComObject WScript.Shell
-$WshShell.Popup("IP Configured: $IP (Copied to Clipboard)", 2, "Done", 64)
+$WshShell.Popup("IP Configured: $IP", 2, "Done", 64)

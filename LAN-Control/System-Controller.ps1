@@ -71,24 +71,32 @@ elseif ($Action -eq "Shutdown") {
 }
 
 foreach ($Target in $Targets) {
-    Write-Host "Processing $Target ..." -NoNewline
-    
-    try {
-        if (-not (Test-Connection -ComputerName $Target -Count 1 -Quiet)) {
-            Write-Log -Target $Target -Status "ERROR" -Message "Host Unreachable (Ping failed)"
-            continue
-        }
-
-        Invoke-Command -ComputerName $Target -Credential $Credential -ScriptBlock $ScriptBlock -ErrorAction Stop
-        
-        Write-Log -Target $Target -Status "SUCCESS" -Message "Command sent successfully."
-        
-    } catch {
-        $ErrMsg = $_.Exception.Message
-        Write-Log -Target $Target -Status "ERROR" -Message $ErrMsg
+    if (-not (Test-Connection -ComputerName $Target -Count 1 -Quiet)) {
+        Write-Log -Target $Target -Status "WARNING" -Message "Host Unreachable (Ping failed)"
     }
 }
 
+Write-Host "Executing command on $($Targets.Count) targets in parallel..." -ForegroundColor Cyan
+
+try {
+    $Results = Invoke-Command -ComputerName $Targets -Credential $Credential -ScriptBlock $ScriptBlock -ErrorAction SilentlyContinue -ThrottleLimit 50
+
+    foreach ($Result in $Results) {
+        Write-Log -Target $Result.PSComputerName -Status "SUCCESS" -Message "Command Executed"
+    }
+    
+    $SuccessHosts = $Results.PSComputerName
+    $FailedHosts = $Targets | Where-Object { $SuccessHosts -notcontains $_ }
+    
+    foreach ($Failed in $FailedHosts) {
+        Write-Log -Target $Failed -Status "ERROR" -Message "Connection Failed or Access Denied"
+    }
+
+} catch {
+    $ErrMsg = $_.Exception.Message
+    Write-Host "Critical Error during batch execution: $ErrMsg" -ForegroundColor Red
+}
+
 Write-Host "========================================="
-Write-Host "batch Execution Complete. Check logs at: $LogFile" -ForegroundColor Cyan
+Write-Host "Batch Execution Complete. Check logs at: $LogFile" -ForegroundColor Cyan
 Pause

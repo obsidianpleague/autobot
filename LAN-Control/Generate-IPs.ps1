@@ -1,8 +1,6 @@
 $File = "$PSScriptRoot\TargetList.txt"
 $IPs = @()
 
-1..4 | ForEach-Object { $IPs += "192.168.0.$_" }
-
 6..255 | ForEach-Object { $IPs += "192.168.0.$_" }
 
 0..52 | ForEach-Object { $IPs += "192.168.1.$_" }

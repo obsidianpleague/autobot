@@ -23,20 +23,20 @@ if not "%1"=="hidden" (
 
 cd /d "%~dp0"
 
-IF EXIST "%LOCALAPPDATA%\Programs\autobot-jamb-browser\autobot-jamb-browser.exe" (
+IF EXIST "%LOCALAPPDATA%\Programs\autobot-jamb-browser-64\autobot-jamb-browser-64.exe" (
     ECHO Already installed on this PC. >> install_log.txt
     ECHO %COMPUTERNAME% - SKIPPED [already installed] - %DATE% %TIME% >> install_log.txt
     EXIT
 )
 
-IF EXIST "C:\Program Files\autobot-jamb-browser\autobot-jamb-browser.exe" (
+IF EXIST "C:\Program Files\autobot-jamb-browser-64\autobot-jamb-browser-64.exe" (
     ECHO Already installed on this PC. >> install_log.txt
     ECHO %COMPUTERNAME% - SKIPPED [already installed] - %DATE% %TIME% >> install_log.txt
     EXIT
 )
 
 SET "INSTALLER="
-IF EXIST "%~dp0autobot-jamb-browser Setup_64bit.exe" SET "INSTALLER=%~dp0autobot-jamb-browser Setup_64bit.exe"
+IF EXIST "%~dp0autobot-jamb-browser-2025.exe" SET "INSTALLER=%~dp0autobot-jamb-browser-2025.exe"
 IF EXIST "%~dp0autobot.exe" SET "INSTALLER=%~dp0autobot.exe"
 
 IF "%INSTALLER%"=="" (
@@ -45,8 +45,11 @@ IF "%INSTALLER%"=="" (
 )
 
 ECHO.
-ECHO Starting JAMB AUTOBOT Installation (Background)...
-start "" "%INSTALLER%" /ALLUSERS=1 /S
+ECHO Installing JAMB AUTOBOT Browser...
+ECHO Please wait...
+"%INSTALLER%" /ALLUSERS=1 /S
+
+timeout /t 10 /nobreak >nul
 
 ECHO Configuring System Settings...
 netsh advfirewall set allprofiles state off
@@ -57,18 +60,6 @@ powercfg -change -monitor-timeout-dc 0
 
 ECHO Configuring IP Address (Check Popup)...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Set-AutoIP.ps1"
-
-ECHO Waiting for Installation to Complete...
-:WaitLoop
-timeout /t 2 /nobreak >nul
-IF EXIST "%LOCALAPPDATA%\Programs\autobot-jamb-browser\autobot-jamb-browser.exe" GOTO AppInstalled
-IF EXIST "C:\Program Files\autobot-jamb-browser\autobot-jamb-browser.exe" GOTO AppInstalled
-GOTO WaitLoop
-
-:AppInstalled
-ECHO Creating Shortcuts...
-powershell -WindowStyle Hidden -Command "$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('C:\Users\Public\Desktop\autobot-jamb-browser.lnk'); $ExePath = \"$env:LOCALAPPDATA\Programs\autobot-jamb-browser\autobot-jamb-browser.exe\"; if (Test-Path $ExePath) { $Shortcut.TargetPath = $ExePath; $Shortcut.Save() } else { $AltPath = 'C:\Program Files\autobot-jamb-browser\autobot-jamb-browser.exe'; if (Test-Path $AltPath) { $Shortcut.TargetPath = $AltPath; $Shortcut.Save() } }"
-copy "C:\Users\Public\Desktop\autobot-jamb-browser.lnk" "C:\Users\Default\Desktop\" /Y >nul 2>&1
 
 ECHO %COMPUTERNAME% - SUCCESS - %DATE% %TIME% >> "%~dp0install_log.txt"
 
