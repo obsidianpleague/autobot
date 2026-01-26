@@ -45,29 +45,34 @@ IF "%INSTALLER%"=="" (
 )
 
 ECHO.
-ECHO Installing JAMB AUTOBOT Browser...
-ECHO Please wait...
-"%INSTALLER%" /ALLUSERS=1 /S
+ECHO Starting JAMB AUTOBOT Installation (Background)...
+start "" "%INSTALLER%" /ALLUSERS=1 /S
 
-timeout /t 10 /nobreak >nul
-
-powershell -WindowStyle Hidden -Command "$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('C:\Users\Public\Desktop\autobot-jamb-browser.lnk'); $ExePath = \"$env:LOCALAPPDATA\Programs\autobot-jamb-browser\autobot-jamb-browser.exe\"; if (Test-Path $ExePath) { $Shortcut.TargetPath = $ExePath; $Shortcut.Save() } else { $AltPath = 'C:\Program Files\autobot-jamb-browser\autobot-jamb-browser.exe'; if (Test-Path $AltPath) { $Shortcut.TargetPath = $AltPath; $Shortcut.Save() } }"
-
-copy "C:\Users\Public\Desktop\autobot-jamb-browser.lnk" "C:\Users\Default\Desktop\" /Y >nul 2>&1
-
+ECHO Configuring System Settings...
 netsh advfirewall set allprofiles state off
-
 powercfg -change -standby-timeout-ac 0
 powercfg -change -standby-timeout-dc 0
 powercfg -change -monitor-timeout-ac 0
 powercfg -change -monitor-timeout-dc 0
 
-powershell -WindowStyle Hidden -Command "Add-Type -AssemblyName Microsoft.VisualBasic; $IP = [Microsoft.VisualBasic.Interaction]::InputBox('Enter Static IP Address (Leave empty to skip):', 'IP Configuration'); if ($IP) { $Subnet = [Microsoft.VisualBasic.Interaction]::InputBox('Enter Subnet Mask:', 'IP Configuration', '255.255.255.0'); $Adapter = Get-NetAdapter | Where-Object Status -eq 'Up' | Select-Object -First 1; if ($Adapter) { netsh interface ip set address \"$($Adapter.Name)\" static $IP $Subnet } }"
+ECHO Configuring IP Address (Check Popup)...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Set-AutoIP.ps1"
+
+ECHO Waiting for Installation to Complete...
+:WaitLoop
+timeout /t 2 /nobreak >nul
+IF EXIST "%LOCALAPPDATA%\Programs\autobot-jamb-browser\autobot-jamb-browser.exe" GOTO AppInstalled
+IF EXIST "C:\Program Files\autobot-jamb-browser\autobot-jamb-browser.exe" GOTO AppInstalled
+GOTO WaitLoop
+
+:AppInstalled
+ECHO Creating Shortcuts...
+powershell -WindowStyle Hidden -Command "$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('C:\Users\Public\Desktop\autobot-jamb-browser.lnk'); $ExePath = \"$env:LOCALAPPDATA\Programs\autobot-jamb-browser\autobot-jamb-browser.exe\"; if (Test-Path $ExePath) { $Shortcut.TargetPath = $ExePath; $Shortcut.Save() } else { $AltPath = 'C:\Program Files\autobot-jamb-browser\autobot-jamb-browser.exe'; if (Test-Path $AltPath) { $Shortcut.TargetPath = $AltPath; $Shortcut.Save() } }"
+copy "C:\Users\Public\Desktop\autobot-jamb-browser.lnk" "C:\Users\Default\Desktop\" /Y >nul 2>&1
 
 ECHO %COMPUTERNAME% - SUCCESS - %DATE% %TIME% >> "%~dp0install_log.txt"
 
-powershell -WindowStyle Hidden -Command "[System.Media.SystemSounds]::Exclamation.Play(); Start-Sleep -Milliseconds 1000"
-
-msg * "JAMB AUTOBOT installed successfully!" /TIME:3 2>nul
+ECHO Launching Application & Automating Setup...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Launch-And-Config.ps1"
 
 EXIT

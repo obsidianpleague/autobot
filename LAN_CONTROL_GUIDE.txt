@@ -1,0 +1,65 @@
+LAN CONTROL - MASTER SERVER GUIDE
+===================================
+
+This guide explains how to set up your "Master Laptop" (Server) to control all 600 client computers.
+
+1. THE CONCEPT
+--------------
+- **Server (You)**: Runs the `System-Controller.ps1` script.
+- **Clients (Them)**: Must have the `DeployAdmin` user account created (by running `ENABLE-LAN-DEPLOY.bat`).
+- **Connection**: PowerShell Remoting (WinRM) over the network.
+
+2. SETTING UP THE SERVER
+------------------------
+You do NOT need to install the Autobot software on the server. You only need the `LAN-Control` folder.
+
+    Step 1: Prepare the Folder
+        - Copy the `LAN-Control` folder from the USB to your Desktop.
+        - Open the folder. You should see `System-Controller.ps1`, `TargetList.txt`, etc.
+
+    Step 2: Populate the Target List
+        You need to tell the server which IP addresses to control.
+        
+        OPTION A: Automatic Generation (Recommended)
+        - Right-click `Generate-IPs.ps1` -> Run with PowerShell.
+        - This will overwrite `TargetList.txt` with a full range of IPs (e.g., 192.168.0.1 to 192.168.1.50).
+        
+        OPTION B: Manual Entry
+        - Open `TargetList.txt`.
+        - Type the IP addresses of the client computers, one per line.
+        - Example:
+            192.168.0.1
+            192.168.0.2
+
+3. PREPARING THE CLIENTS
+------------------------
+For the server to control a client, the client MUST have the `DeployAdmin` user.
+    
+    * IMPORTANT: Ensure `ENABLE-LAN-DEPLOY.bat` was run on every client computer.
+    * If you forgot to run it during installation, you must go back and run it manually on each machine.
+
+4. RUNNING VIA GUI (Simpler)
+----------------------------
+    Step 1: Right-click `System-Controller.ps1` -> Run with PowerShell.
+    Step 2: Enter Credentials (User: DeployAdmin / Pass: Jamb123!)
+    Step 3: Choose Action (1=Launch, 2=Shutdown).
+
+5. RUNNING VIA COMMAND LINE (Advanced)
+--------------------------------------
+If "Run with PowerShell" is blocked or you prefer the terminal:
+
+    Step 1: Open PowerShell as Administrator.
+    Step 2: Navigate to the folder:
+        cd "C:\Users\YOUR_USER\Desktop\LAN-Control"
+    
+    Step 3: Run the Controller:
+        powershell -ExecutionPolicy Bypass -File .\System-Controller.ps1
+
+    Step 4: Run Target Generator (Optional):
+        powershell -ExecutionPolicy Bypass -File .\Generate-IPs.ps1
+
+6. TROUBLESHOOTING
+------------------
+- **"WinRM cannot process the request"**: The client didn't run `ENABLE-LAN-DEPLOY.bat`.
+- **"Host Unreachable"**: The computer is off or the IP is wrong.
+- **"Access Denied"**: Wrong password relative to what's on the client.

@@ -1,0 +1,75 @@
+TECHNICAL DOCUMENTATION
+
+1. FOLDER STRUCTURE OVERVIEW
+
+ROOT (USB-Autorun/)
+    |-- AUTO-INSTALL.bat         : The main entry point script that gets triggered automatically (or manually).
+    |-- ENABLE-LAN-DEPLOY.bat    : Utility script to prepare a machine for LAN control (firewall rules, WinRM).
+    |-- Set-AutoIP.ps1           : PowerShell script that handles the logic for setting and incrementing IP addresses.
+    |-- install_log.txt          : Log file where installation success/failures are recorded.
+    |-- next_ip.txt              : Stores the NEXT IP address to be assigned. Used by Set-AutoIP.ps1.
+    |-- autorun.inf              : Legacy file to trigger AutoPlay on supported Windows versions.
+    |
+    |-- LAN-Control/             : Contains administrative scripts for managing the network after installation.
+        |-- Generate-IPs.ps1     : Helper to generate a list of target IPs (e.g., 192.168.0.x) into TargetList.txt.
+        |-- Generate-Center2.ps1 : Helper to generate a different range of IPs (e.g., 172.16.x.x).
+        |-- TargetList.txt       : A text file containing the list of IP addresses or Hostnames to control.
+        |-- System-Controller.ps1: The MASTER control script. Run this to Launch apps or Shutdown PCs.
+        |-- Remote-Launch-App.ps1: The "payload" script sent to targets to launch the Autobot browser.
+        |-- Remote-Shutdown.ps1  : The "payload" script sent to targets to shut them down.
+        |-- Launch-All-Autobot.ps1: Older standalone script for launching (integrated into System-Controller now).
+        |-- Shutdown-All-Systems.ps1: Older standalone script for shutdown (integrated into System-Controller now).
+
+2. WORKFLOW 1: USB "BLITZ" DEPLOYMENT
+-------------------------------------
+This workflow is used to physically install the software and configure IPs on 600+ machines rapidly.
+
+    Step 1: Preparation
+        - You copy this entire folder to a USB drive.
+        - You create a `next_ip.txt` file on the USB.
+        - Open the file and type ONLY the starting IP (e.g., 192.168.0.1). Do NOT use quotes or spaces.
+
+    Step 2: Execution (On Target PC)
+        - Insert USB.
+        - Run `AUTO-INSTALL.bat`.
+        - The script performs these actions in PARALLEL to save time:
+            1. Starts the software installation in the BACKGROUND.
+            2. Immediately pops up the IP Configuration box (Set-AutoIP.ps1).
+            3. Disables Firewall and Sleep settings while you verify the IP.
+
+    Step 3: IP Configuration (Set-AutoIP.ps1)
+        - The popup box shows the Suggested IP (from `next_ip.txt`).
+        - You simply press Enter to accept it (or edit if needed).
+        - The script sets the Static IP.
+        - The IP is AUTOMATICALLY COPIED to your clipboard.
+        - The script calculates the NEXT IP (e.g., .2) and updates the USB.
+        
+    Step 4: Auto-Launch & Auto-Entry
+        - The script waits for the background installation to finish.
+        - Once finished, it creates desktop shortcuts.
+        - It AUTOMATICALLY LAUNCHES the JAMB Autobot Browser.
+        - It waits for the window to load (approx 8 seconds).
+        - It AUTOMATICALLY Selects All (Ctrl+A), PASTES the IP (Ctrl+V) and presses ENTER.
+        - You can unplug the USB and move to the next PC immediately.
+
+3. WORKFLOW 2: LAN CONTROL (CENTRAL MANAGEMENT)
+-----------------------------------------------
+This workflow is used AFTER deployment to manage all 600 computers from one Administrator Laptop.
+
+    Step 1: Setup Target List
+        - Open `LAN-Control` folder.
+        - Run `Generate-IPs.ps1` (or edit `TargetList.txt` manually) to populate the list of all IPs you just deployed.
+
+    Step 2: Run Controller
+        - Right-click `System-Controller.ps1` -> Run with PowerShell.
+        - Enter Administrator Credentials (username/password common to all PCs).
+
+    Step 3: Choose Action
+        - Option 1 [Launch]: The script connects to every IP in `TargetList.txt`. It uses PowerShell Remoting (WinRM) to push `Remote-Launch-App.ps1` to the target. This creates a scheduled task to launch the browser on the user's active desktop.
+        - Option 2 [Shutdown]: The script sends a shutdown command to all IPs list, turning off the entire center at once.
+
+4. TROUBLESHOOTING
+------------------
+    - "Access Denied" in LAN Control: Means the target PC has a different password or Firewall is on. Run `ENABLE-LAN-DEPLOY.bat` on the target to fix.
+    - "Host Unreachable": The PC is turned off or the IP is wrong.
+    - USB Script Fails: Check `install_log.txt` on the USB drive for error messages.
