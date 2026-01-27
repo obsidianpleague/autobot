@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
-$AppPath_System = "C:\Program Files\autobot-jamb-browser\autobot-jamb-browser.exe"
-$AppPath_User   = "$env:LOCALAPPDATA\Programs\autobot-jamb-browser\autobot-jamb-browser.exe"
+$AppPath_System = "C:\Program Files\autobot-jamb-browser-64\autobot-jamb-browser-64.exe"
+$AppPath_User   = "$env:LOCALAPPDATA\Programs\autobot-jamb-browser-64\autobot-jamb-browser-64.exe"
 
 $TargetExe = ""
 if (Test-Path $AppPath_System) { $TargetExe = $AppPath_System }

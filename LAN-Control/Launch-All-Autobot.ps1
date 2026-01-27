@@ -1,66 +1,87 @@
 Param(
-    [string]$TargetList = "$PSScriptRoot\TargetList.txt",
     [PSCredential]$Credential
 )
 
 $ErrorActionPreference = "Stop"
 $LogFile = "$PSScriptRoot\Launch_Log.csv"
 
-if (-not $Credential) {
-    $Credential = Get-Credential
+
+function Write-Log {
+    Param($Target, $Status, $Message)
+    $Date = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    if ($Status -eq "SUCCESS") { Write-Host "[$Date] $Target : $Status - $Message" -ForegroundColor Green }
+    elseif ($Status -eq "ERROR")   { Write-Host "[$Date] $Target : $Status - $Message" -ForegroundColor Red }
+    else                           { Write-Host "[$Date] $Target : $Status - $Message" -ForegroundColor Yellow }
+
+    [PSCustomObject]@{ Timestamp = $Date; Target = $Target; Status = $Status; Message = $Message } | Export-Csv -Path $LogFile -Append -NoTypeInformation
+}
+
+
+Write-Host "=========================================" -ForegroundColor Green
+Write-Host "   MASS LAUNCH CONTROLLER" -ForegroundColor Green
+Write-Host "========================================="
+Write-Host "1. Launch on CENTER 1 (192.168.x.x)"
+Write-Host "2. Launch on CENTER 2 (172.16.x.x)"
+Write-Host "Q. Cancel"
+$CenterChoice = Read-Host "Select Center"
+
+switch ($CenterChoice) {
+    "1" { $TargetList = "$PSScriptRoot\Center1_Targets.txt" }
+    "2" { $TargetList = "$PSScriptRoot\Center2_Targets.txt" }
+    "Q" { exit }
+    Default { Write-Warning "Invalid selection."; exit }
 }
 
 if (-not (Test-Path $TargetList)) {
-    Write-Error "Target list not found."
+    Write-Error "Target list not found ($TargetList)."
     exit
 }
 
-$Targets = Get-Content $TargetList | Where-Object { $_.Trim() -ne "" }
-
-$ScriptBlock = {
-    $ErrorActionPreference = "Stop"
-    $AppPath_System = "C:\Program Files\autobot-jamb-browser\autobot-jamb-browser.exe"
-    $AppPath_User   = "$env:LOCALAPPDATA\Programs\autobot-jamb-browser\autobot-jamb-browser.exe"
-    
-    $TargetExe = ""
-    if (Test-Path $AppPath_System) { $TargetExe = $AppPath_System }
-    elseif (Test-Path $AppPath_User) { $TargetExe = $AppPath_User }
-    
-    if (-not $TargetExe) { return "APP_NOT_FOUND" }
-
-    $quser = quser 2>&1
-    if ($LASTEXITCODE -ne 0) { return "NO_USER_SESSION" }
-    
-    $ActiveSession = $quser | Where-Object { $_ -match "Active" -or $_ -match "Console" } | Select-Object -First 1
-    if (-not $ActiveSession) { return "NO_ACTIVE_USER" }
-    
-    $TargetUser = $ActiveSession.Trim().Split(" ")[0].Replace(">", "")
-    
-    $TaskName = "AutoBot_Launch"
-    Start-Process -FilePath "schtasks.exe" -ArgumentList "/Create /TN $TaskName /TR `"`"$TargetExe`"`" /SC ONCE /ST 00:00 /IT /RU $TargetUser /RP `"`" /F /RL HIGHEST" -Wait -NoNewWindow
-    Start-Process -FilePath "schtasks.exe" -ArgumentList "/Run /TN $TaskName" -Wait -NoNewWindow
-    Start-Sleep -Seconds 3
-    Start-Process -FilePath "schtasks.exe" -ArgumentList "/Delete /TN $TaskName /F" -Wait -NoNewWindow
-    
-    return "LAUNCHED"
+if (-not $Credential) {
+    Write-Host "Enter Admin Credentials..." -ForegroundColor Yellow
+    $Credential = Get-Credential
 }
 
-foreach ($Target in $Targets) {
-    $Status = "UNKNOWN"
-    try {
-        if (Test-Connection -ComputerName $Target -Count 1 -Quiet) {
-            $Result = Invoke-Command -ComputerName $Target -Credential $Credential -ScriptBlock $ScriptBlock -ErrorAction Stop
-            $Status = $Result
-        } else {
-            $Status = "UNREACHABLE"
-        }
-    } catch {
-        $Status = "ERROR"
+
+$AllTargets = Get-Content $TargetList | Where-Object { -not $_.StartsWith("#") -and $_.Trim() -ne "" }
+$OnlineTargets = @()
+
+Write-Host "Scanning $($AllTargets.Count) targets..." -ForegroundColor Cyan
+foreach ($Target in $AllTargets) {
+    if (Test-Connection -ComputerName $Target -Count 1 -Quiet -ErrorAction SilentlyContinue) {
+        $OnlineTargets += $Target
+        Write-Host "." -NoNewline -ForegroundColor Green
+    }
+}
+Write-Host ""
+Write-Host "Online: $($OnlineTargets.Count) / $($AllTargets.Count)" -ForegroundColor Cyan
+
+if ($OnlineTargets.Count -eq 0) { Write-Warning "No targets online."; exit }
+
+
+Write-Host "Launching App on $($OnlineTargets.Count) systems..." -ForegroundColor Green
+$ScriptBlock = [ScriptBlock]::Create((Get-Content "$PSScriptRoot\Remote-Launch-App.ps1" -Raw))
+
+try {
+    $Results = Invoke-Command -ComputerName $OnlineTargets -Credential $Credential -ScriptBlock $ScriptBlock -ThrottleLimit 50
+    
+
+    $SuccessHosts = if ($Results) { $Results.PSComputerName } else { @() }
+    
+
+    $FailedHosts = $OnlineTargets | Where-Object { $SuccessHosts -notcontains $_ }
+    
+    foreach ($Failed in $FailedHosts) {
+         Write-Log -Target $Failed -Status "ERROR" -Message "Launch Failed (Access Denied?)"
+         Write-Host "   ! FAILED: $Failed - Check Admin Rights / Run ENABLE-LAN-DEPLOY.bat" -ForegroundColor Red
     }
     
-    [PSCustomObject]@{
-        Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        Target    = $Target
-        Status    = $Status
-    } | Export-Csv -Path $LogFile -Append -NoTypeInformation
+    if ($Results) {
+        foreach ($Res in $Results) { Write-Log -Target $Res.PSComputerName -Status "SUCCESS" -Message "Launch Sent" }
+    }
+} catch {
+    Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
 }
+
+Write-Host "Execution complete." -ForegroundColor Cyan
+Pause

@@ -1,58 +1,90 @@
 Param(
-    [string]$TargetList = "$PSScriptRoot\TargetList.txt",
     [PSCredential]$Credential,
-    [int]$DelaySeconds = 30
+    [int]$DelaySeconds = 0
 )
 
 $ErrorActionPreference = "Stop"
 $LogFile = "$PSScriptRoot\Shutdown_Log.csv"
 
-if (-not $Credential) {
-    $Credential = Get-Credential
+
+function Write-Log {
+    Param($Target, $Status, $Message)
+    $Date = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    if ($Status -eq "SUCCESS") { Write-Host "[$Date] $Target : $Status - $Message" -ForegroundColor Green }
+    elseif ($Status -eq "ERROR")   { Write-Host "[$Date] $Target : $Status - $Message" -ForegroundColor Red }
+    else                           { Write-Host "[$Date] $Target : $Status - $Message" -ForegroundColor Yellow }
+
+    [PSCustomObject]@{ Timestamp = $Date; Target = $Target; Status = $Status; Message = $Message } | Export-Csv -Path $LogFile -Append -NoTypeInformation
+}
+
+
+Write-Host "=========================================" -ForegroundColor Red
+Write-Host "   EMERGENCY SHUTDOWN CONTROLLER" -ForegroundColor Red
+Write-Host "========================================="
+Write-Host "1. Shutdown CENTER 1 (192.168.x.x)"
+Write-Host "2. Shutdown CENTER 2 (172.16.x.x)"
+Write-Host "Q. Cancel"
+$CenterChoice = Read-Host "Select Center to Shutdown"
+
+switch ($CenterChoice) {
+    "1" { $TargetList = "$PSScriptRoot\Center1_Targets.txt" }
+    "2" { $TargetList = "$PSScriptRoot\Center2_Targets.txt" }
+    "Q" { exit }
+    Default { Write-Warning "Invalid selection."; exit }
 }
 
 if (-not (Test-Path $TargetList)) {
-    Write-Error "Target list not found."
+    Write-Error "Target list not found ($TargetList). Please run Generate-Center1/2.ps1 first."
     exit
 }
 
-$Targets = Get-Content $TargetList | Where-Object { $_.Trim() -ne "" }
+if (-not $Credential) {
+    Write-Host "Enter Admin Credentials..." -ForegroundColor Yellow
+    $Credential = Get-Credential
+}
+
+
+$AllTargets = Get-Content $TargetList | Where-Object { -not $_.StartsWith("#") -and $_.Trim() -ne "" }
+$OnlineTargets = @()
+
+Write-Host "Scanning $($AllTargets.Count) targets..." -ForegroundColor Cyan
+foreach ($Target in $AllTargets) {
+    if (Test-Connection -ComputerName $Target -Count 1 -Quiet -ErrorAction SilentlyContinue) {
+        $OnlineTargets += $Target
+        Write-Host "." -NoNewline -ForegroundColor Green
+    }
+}
+Write-Host ""
+Write-Host "Online: $($OnlineTargets.Count) / $($AllTargets.Count)" -ForegroundColor Cyan
+
+if ($OnlineTargets.Count -eq 0) { Write-Warning "No targets online."; exit }
+
+
+Write-Host "SHUTTING DOWN $($OnlineTargets.Count) SYSTEMS..." -ForegroundColor Red
+Start-Sleep -Seconds 2
 
 $ScriptBlock = {
     Param([int]$Delay)
-    $ErrorActionPreference = "Stop"
-    
     Start-Process "shutdown.exe" -ArgumentList "/s /f /t $Delay" -Wait -NoNewWindow
-    return "SHUTDOWN_INITIATED"
 }
 
-Write-Host "Initiating Parallel Shutdown on $($Targets.Count) systems..." -ForegroundColor Cyan
-
 try {
-    $Results = Invoke-Command -ComputerName $Targets -Credential $Credential -ScriptBlock $ScriptBlock -ArgumentList $DelaySeconds -ThrottleLimit 50 -ErrorAction SilentlyContinue
+    $Results = Invoke-Command -ComputerName $OnlineTargets -Credential $Credential -ScriptBlock $ScriptBlock -ArgumentList $DelaySeconds -ThrottleLimit 50 -ErrorVariable ExecError
     
-    foreach ($Res in $Results) {
-        [PSCustomObject]@{
-            Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-            Target    = $Res.PSComputerName
-            Status    = "SHUTDOWN_INITIATED"
-        } | Export-Csv -Path $LogFile -Append -NoTypeInformation
-        Write-Host "Shutdown sent to $($Res.PSComputerName)" -ForegroundColor Green
-    }
+
+    $SuccessHosts = if ($Results) { $Results.PSComputerName } else { @() }
     
-    $SuccessHosts = $Results.PSComputerName
-    $FailedHosts = $Targets | Where-Object { $SuccessHosts -notcontains $_ }
+
+    $FailedHosts = $OnlineTargets | Where-Object { $SuccessHosts -notcontains $_ }
     
     foreach ($Failed in $FailedHosts) {
-         [PSCustomObject]@{
-            Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-            Target    = $Failed
-            Status    = "FAILED"
-        } | Export-Csv -Path $LogFile -Append -NoTypeInformation
-        Write-Host "Failed to reach $Failed" -ForegroundColor Red
+         Write-Log -Target $Failed -Status "ERROR" -Message "Shutdown Failed (Access Denied?)"
+         Write-Host "   ! FAILED: $Failed - Check Admin Rights / Run ENABLE-LAN-DEPLOY.bat" -ForegroundColor Red
     }
 
 } catch {
-    Write-Error "Fatal error during batch shutdown: $_"
+    Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
 }
 
+Write-Host "Shutdown command execution complete." -ForegroundColor Cyan
+Pause

@@ -36,25 +36,23 @@ if ($Proc) {
 
 Start-Sleep -Seconds 2
 
-try {
-    Set-Clipboard -Value "192.168.0.1"
-} catch {
-    try {
-        Add-Type -AssemblyName System.Windows.Forms
-        [System.Windows.Forms.Clipboard]::SetText("192.168.0.1")
-    } catch {}
-}
+$ServerIP = "192.168.0.1"
+$IpFile = "$PSScriptRoot\server_ip.txt"
 
- # Ensure window is actually focused
+if (Test-Path $IpFile) {
+    try {
+        $Content = Get-Content $IpFile -Raw
+        $ServerIP = $Content.Trim()
+    } catch {
+    }
+}
 $Activated = $false
 $FocusAttempts = 0
 $TargetTitle = "ENTER SERVER URL"
 
 while (-not $Activated -and $FocusAttempts -lt 10) {
-    # Try specific modal title first
     $Activated = $WshShell.AppActivate($TargetTitle)
     
-    # Fallback to process name if specific title fails
     if (-not $Activated) {
         $Activated = $WshShell.AppActivate($ProcessName)
     }
@@ -68,11 +66,12 @@ if ($Activated) {
     Start-Sleep -Milliseconds 500
     $WshShell.SendKeys("^a")
     Start-Sleep -Milliseconds 500
-    $WshShell.SendKeys("^v")
+   
+    $WshShell.SendKeys($ServerIP)
+    
     Start-Sleep -Milliseconds 500
     $WshShell.SendKeys("{ENTER}")
 } else {
-    # If we still can't find it, log a warning (silent in this context, but good for debugging)
-    # exit
+  
     exit
 }
