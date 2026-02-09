@@ -32,12 +32,18 @@ if ([string]::IsNullOrWhiteSpace($IP)) {
 }
 
 
-Log-Write "Detecting Network Adapter..."
-$Adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.InterfaceDescription -notmatch 'Virtual|Loopback|VMware|VirtualBox' } | Select-Object -First 1
+Log-Write "Detecting Ethernet Adapter..."
+$Adapter = Get-NetAdapter | Where-Object {
+    $_.Status -eq 'Up' -and
+    $_.MediaType -eq '802.3' -and
+    $_.InterfaceDescription -notmatch 'Virtual|Loopback|VMware|VirtualBox|Wi-Fi|Wireless'
+} | Select-Object -First 1
 
 if (-not $Adapter) {
-
-    $Adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
+    $Adapter = Get-NetAdapter | Where-Object {
+        $_.Status -eq 'Up' -and
+        $_.InterfaceDescription -notmatch 'Wi-Fi|Wireless|Virtual|Loopback'
+    } | Select-Object -First 1
 }
 
 if ($Adapter) {
