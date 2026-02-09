@@ -1,5 +1,5 @@
 @echo off
-TITLE JAMB AUTOBOT - Enable LAN Deployment
+TITLE Enable LAN Deployment
 COLOR 0A
 
 >nul 2>&1 "%SYSTEMROOT%\system32\cacls.exe" "%SYSTEMROOT%\system32\config\system"
@@ -18,20 +18,5 @@ if '%errorlevel%' NEQ '0' (
     pushd "%CD%"
     CD /D "%~dp0"
 
-ECHO Enabling LAN Deployment... (Please Wait)
-
-winrm quickconfig -quiet -force >nul 2>&1
-netsh advfirewall firewall add rule name="WinRM-HTTP" dir=in action=allow protocol=TCP localport=5985 >nul 2>&1
-netsh advfirewall firewall add rule name="ICMP-Allow" protocol=icmpv4:8,any dir=in action=allow >nul 2>&1
-reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f >nul 2>&1
-
-net user DeployAdmin Jamb123! /add >nul 2>&1
-net localgroup Administrators DeployAdmin /add >nul 2>&1
-net user DeployAdmin /active:yes >nul 2>&1
-wmic useraccount where "Name='DeployAdmin'" set PasswordExpires=FALSE >nul 2>&1
-
-ECHO.
-ECHO SUCCESS! 
-ECHO Admin: DeployAdmin / Jamb123!
-ECHO.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Enable-LAN.ps1"
 PAUSE

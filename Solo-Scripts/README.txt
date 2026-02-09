@@ -15,3 +15,25 @@ Files:
 - Set-IP.bat: The launcher.
 - Set-IP-Interactive.ps1: The script logic.
 - next_ip.txt: Stores the next IP to use. Edit this if you want to jump to a specific range.
+
+=========================================
+
+MAC ADDRESS CHANGE TOOL
+
+Changes the MAC address based on the current IP, then restarts.
+Computer name is NOT changed.
+
+How to Use:
+1. Double-click "RECONFIGURE-IDENTITY.bat".
+2. Accept the Admin prompt.
+3. The script will:
+   - Detect the current IP address
+   - Generate a new MAC address (based on IP hash, varied vendor OUIs)
+   - Apply the MAC change
+   - Restart the computer after 10 seconds
+
+Files:
+- RECONFIGURE-IDENTITY.bat: The launcher.
+- Reconfigure-Identity.ps1: The script logic.
+- reconfigure_log.txt: Log of what was changed (created after first run).
+
