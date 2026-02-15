@@ -5,9 +5,11 @@ This guide explains how to set up your "Master Laptop" (Server) to control all 6
 
 1. THE CONCEPT
 --------------
-- **Server (You)**: Runs the `System-Controller.ps1` script.
+- **Server (You)**: Runs the LAN-Control scripts.
 - **Clients (Them)**: Must have the `DeployAdmin` user account created (by running `ENABLE-LAN-DEPLOY.bat`).
 - **Connection**: PowerShell Remoting (WinRM) over the network.
+- **App Install**: The Autobot app is installed per-user (not system-wide). The launch script automatically
+  finds it from any user profile on the target machine.
 
 2. SETTING UP THE SERVER
 ------------------------
@@ -15,39 +17,56 @@ You do NOT need to install the Autobot software on the server. You only need the
 
     Step 1: Prepare the Folder
         - Copy the `LAN-Control` folder from the USB to your Desktop.
-        - Open the folder. You should see `System-Controller.ps1`, `TargetList.txt`, etc.
+        - You should see: System-Controller.ps1, Targets-Config.ps1, Center1_Targets.txt, etc.
 
-    Step 2: Populate the Target List
-        You need to tell the server which IP addresses to control.
+    Step 2: Populate the Target Lists
+        All scripts share the same target lists defined in Targets-Config.ps1.
         
         OPTION A: Automatic Generation (Recommended)
-        - Right-click `Generate-IPs.ps1` -> Run with PowerShell.
-        - This will overwrite `TargetList.txt` with a full range of IPs (e.g., 192.168.0.1 to 192.168.1.50).
+        - Double-click `GENERATE-TARGETS.bat`.
+        - This generates Center1_Targets.txt and Center2_Targets.txt with full IP ranges.
         
         OPTION B: Manual Entry
-        - Open `TargetList.txt`.
+        - Open Center1_Targets.txt or Center2_Targets.txt.
         - Type the IP addresses of the client computers, one per line.
-        - Example:
-            192.168.0.1
-            192.168.0.2
 
-3. PREPARING THE CLIENTS
+3. CENTRALIZED CONFIGURATION
+-----------------------------
+All scripts share a single config file: Targets-Config.ps1
+
+    This file contains:
+    - Center definitions (names, subnets, target file paths)
+    - Shared functions: Select-Center, Get-Targets, Get-OnlineTargets, Get-DeployCredential, Write-Log
+    - To change center settings, edit ONLY Targets-Config.ps1 — all scripts will pick up the changes.
+
+4. PREPARING THE CLIENTS
 ------------------------
 For the server to control a client, the client MUST have the `DeployAdmin` user.
     
     * IMPORTANT: Ensure `ENABLE-LAN-DEPLOY.bat` was run on every client computer.
     * If you forgot to run it during installation, you must go back and run it manually on each machine.
 
-4. RUNNING VIA GUI (Simpler)
+5. AVAILABLE SCRIPTS
+---------------------
+    System-Controller.ps1  - Main controller (Launch App OR Shutdown Systems)
+    Launch-All-Autobot.ps1 - Launch the Autobot app on all targets
+    Shutdown-All-Systems.ps1 - Emergency shutdown of all targets
+    Mass-Reconfigure-Identity.ps1 - Mass MAC address change
+
+    All scripts will:
+    1. Ask you to select a Center (1 or 2)
+    2. Prompt for DeployAdmin credentials
+    3. Scan for online targets
+    4. Execute the action
+
+6. RUNNING VIA GUI (Simpler)
 ----------------------------
-    Step 1: Right-click `System-Controller.ps1` -> Run with PowerShell.
+    Step 1: Right-click any script -> Run with PowerShell.
     Step 2: Enter Credentials (User: DeployAdmin / Pass: Jamb123!)
-    Step 3: Choose Action (1=Launch, 2=Shutdown).
+    Step 3: Follow the on-screen prompts.
 
-5. RUNNING VIA COMMAND LINE (Advanced)
+7. RUNNING VIA COMMAND LINE (Advanced)
 --------------------------------------
-If "Run with PowerShell" is blocked or you prefer the terminal:
-
     Step 1: Open PowerShell as Administrator.
     Step 2: Navigate to the folder:
         cd "C:\Users\YOUR_USER\Desktop\LAN-Control"
@@ -56,10 +75,11 @@ If "Run with PowerShell" is blocked or you prefer the terminal:
         powershell -ExecutionPolicy Bypass -File .\System-Controller.ps1
 
     Step 4: Run Target Generator (Optional):
-        powershell -ExecutionPolicy Bypass -File .\Generate-IPs.ps1
+        GENERATE-TARGETS.bat
 
-6. TROUBLESHOOTING
+8. TROUBLESHOOTING
 ------------------
-- **"WinRM cannot process the request"**: The client didn't run `ENABLE-LAN-DEPLOY.bat`.
-- **"Host Unreachable"**: The computer is off or the IP is wrong.
-- **"Access Denied"**: Wrong password relative to what's on the client.
+- "WinRM cannot process the request": The client didn't run `ENABLE-LAN-DEPLOY.bat`.
+- "Host Unreachable": The computer is off or the IP is wrong.
+- "Access Denied": Wrong password relative to what's on the client.
+- "Application not found": The Autobot app is not installed on the target machine.

@@ -1,22 +1,6 @@
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot\Targets-Config.ps1"
 $LogFile = "$PSScriptRoot\MassReconfigure_Log.csv"
-
-function Write-Log {
-    Param($Target, $Status, $Message)
-    $Date = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    
-    if ($Status -eq "SUCCESS") { Write-Host "[$Date] $Target : $Status - $Message" -ForegroundColor Green }
-    elseif ($Status -eq "ERROR")   { Write-Host "[$Date] $Target : $Status - $Message" -ForegroundColor Red }
-    elseif ($Status -eq "WARNING") { Write-Host "[$Date] $Target : $Status - $Message" -ForegroundColor Yellow }
-    else                           { Write-Host "[$Date] $Target : $Status - $Message" -ForegroundColor Gray }
-
-    [PSCustomObject]@{
-        Timestamp = $Date
-        Target    = $Target
-        Status    = $Status
-        Message   = $Message
-    } | Export-Csv -Path $LogFile -Append -NoTypeInformation
-}
 
 $RemoteScript = @'
 $ErrorActionPreference = "Stop"
@@ -69,47 +53,14 @@ Write-Host "This will change MAC addresses on all targets"
 Write-Host "and RESTART them immediately."
 Write-Host "(Computer names will NOT be changed)"
 Write-Host ""
-Write-Host "1. Change MACs for CENTER 1 (192.168.x.x)"
-Write-Host "2. Change MACs for CENTER 2 (172.16.x.x)"
-Write-Host "Q. Quit"
-$CenterChoice = Read-Host "Select Center"
 
-switch ($CenterChoice) {
-    "1" { $TargetList = "$PSScriptRoot\Center1_Targets.txt" }
-    "2" { $TargetList = "$PSScriptRoot\Center2_Targets.txt" }
-    "Q" { exit }
-    Default { Write-Warning "Invalid selection."; exit }
-}
-
-if (-not (Test-Path $TargetList)) {
-    Write-Error "Target list not found: $TargetList"
-    exit
-}
+$TargetList = Select-Center -ActionLabel "Change MACs for"
 
 Write-Host ""
-Write-Host "Enter Admin Credentials..." -ForegroundColor Yellow
-$Credential = Get-Credential
+$Credential = Get-DeployCredential
 
-$AllTargets = Get-Content $TargetList | Where-Object { -not $_.StartsWith("#") -and $_.Trim() -ne "" }
-$OnlineTargets = @()
-
-Write-Host "Checking connectivity for $($AllTargets.Count) targets..." -ForegroundColor Cyan
-
-foreach ($Target in $AllTargets) {
-    if (Test-Connection -ComputerName $Target -Count 1 -Quiet -ErrorAction SilentlyContinue) {
-        $OnlineTargets += $Target
-        Write-Host "." -NoNewline -ForegroundColor Green
-    } else {
-        Write-Log -Target $Target -Status "WARNING" -Message "Offline/Unreachable"
-    }
-}
-Write-Host ""
-Write-Host "Online: $($OnlineTargets.Count) / $($AllTargets.Count)" -ForegroundColor Cyan
-
-if ($OnlineTargets.Count -eq 0) {
-    Write-Warning "No targets online."
-    exit
-}
+$AllTargets = Get-Targets -TargetList $TargetList
+$OnlineTargets = Get-OnlineTargets -AllTargets $AllTargets -LogFile $LogFile
 
 Write-Host ""
 Write-Host "WARNING: This will change MAC on $($OnlineTargets.Count) systems and restart them!" -ForegroundColor Red
@@ -141,14 +92,14 @@ foreach ($Batch in $Batches) {
         $Results = Invoke-Command -ComputerName $Batch -Credential $Credential -ScriptBlock $ScriptBlock -ThrottleLimit 50 -ErrorAction SilentlyContinue
         
         foreach ($Res in $Results) {
-            Write-Log -Target $Res.IP -Status $Res.Status -Message "$($Res.ComputerName) -> MAC: $($Res.NewMAC)"
+            Write-Log -Target $Res.IP -Status $Res.Status -Message "$($Res.ComputerName) -> MAC: $($Res.NewMAC)" -LogFile $LogFile
         }
         
         $SuccessIPs = if ($Results) { $Results.IP } else { @() }
         $FailedTargets = $Batch | Where-Object { $SuccessIPs -notcontains $_ }
         
         foreach ($Failed in $FailedTargets) {
-            Write-Log -Target $Failed -Status "ERROR" -Message "Command failed (check WinRM/credentials)"
+            Write-Log -Target $Failed -Status "ERROR" -Message "Command failed (check WinRM/credentials)" -LogFile $LogFile
         }
     }
     catch {
