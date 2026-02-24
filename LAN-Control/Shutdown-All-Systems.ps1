@@ -22,18 +22,20 @@ Start-Sleep -Seconds 2
 
 $ScriptBlock = {
     Param([int]$Delay)
-    Start-Process "shutdown.exe" -ArgumentList "/s /f /t $Delay" -Wait -NoNewWindow
+    Start-Process "shutdown.exe" -ArgumentList "/s /f /t $Delay" -NoNewWindow
 }
 
 try {
-    $Results = Invoke-Command -ComputerName $OnlineTargets -Credential $Credential -ScriptBlock $ScriptBlock -ArgumentList $DelaySeconds -ThrottleLimit 50 -ErrorVariable ExecError
+    Invoke-Command -ComputerName $OnlineTargets -Credential $Credential -ScriptBlock $ScriptBlock -ArgumentList $DelaySeconds -ThrottleLimit 50 -ErrorAction SilentlyContinue -ErrorVariable ExecError
 
-    $SuccessHosts = if ($Results) { $Results.PSComputerName } else { @() }
-    $FailedHosts = $OnlineTargets | Where-Object { $SuccessHosts -notcontains $_ }
-
-    foreach ($Failed in $FailedHosts) {
-         Write-Log -Target $Failed -Status "ERROR" -Message "Shutdown Failed (Access Denied?)" -LogFile $LogFile
-         Write-Host "   ! FAILED: $Failed - Check Admin Rights / Run ENABLE-LAN-DEPLOY.bat" -ForegroundColor Red
+    foreach ($Target in $OnlineTargets) {
+        $HasError = $ExecError | Where-Object { $_.TargetObject -eq $Target }
+        if ($HasError) {
+            Write-Log -Target $Target -Status "ERROR" -Message "Shutdown Failed (Access Denied?)" -LogFile $LogFile
+            Write-Host "   ! FAILED: $Target - Check Admin Rights / Run ENABLE-LAN-DEPLOY.bat" -ForegroundColor Red
+        } else {
+            Write-Log -Target $Target -Status "SUCCESS" -Message "Shutdown Sent" -LogFile $LogFile
+        }
     }
 
 } catch {
@@ -42,3 +44,4 @@ try {
 
 Write-Host "Shutdown command execution complete." -ForegroundColor Cyan
 Pause
+

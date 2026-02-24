@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "SilentlyContinue"
 
 $AppName = "autobot-jamb-browser-64"
 $ExeName = "autobot-jamb-browser-64.exe"
@@ -26,39 +26,43 @@ if (-not $TargetExe) {
     return
 }
 
+$TargetUser = $null
+$SessionId = $null
+
 try {
     $quser = quser 2>&1
-    $ActiveSession = $quser | Where-Object { $_ -match "Active" -or $_ -match "Console" } | Select-Object -First 1
-
-    if (-not $ActiveSession) {
-        Write-Warning "No active user session found. Cannot launch GUI app."
-        return
+    foreach ($Line in $quser) {
+        if ($Line -match "Active" -or $Line -match "Console") {
+            $Parts = $Line.Trim() -replace '\s{2,}', ',' -split ','
+            $TargetUser = $Parts[0].Replace(">", "").Trim()
+            break
+        }
     }
+} catch {}
 
-    $TargetUser = $ActiveSession.Trim().Split(" ")[0]
-    $TargetUser = $TargetUser.Replace(">", "")
-
-    Write-Host "Detected Active User: $TargetUser"
-}
-catch {
-    Write-Warning "Failed to query users. Is this a workstation?"
+if (-not $TargetUser) {
+    Write-Warning "No active user session found. Cannot launch GUI app."
     return
 }
 
+Write-Host "Detected Active User: $TargetUser"
+Write-Host "Application Path: $TargetExe"
+
 $TaskName = "AutoBot_Remote_Launch"
-$Action = New-ScheduledTaskAction -Execute $TargetExe
-$Trigger = New-ScheduledTaskTrigger -Once -At 00:00
 
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 
-Write-Host "Launching from: $TargetExe"
-Write-Host "Creating interactive task for $TargetUser..."
+$Action = New-ScheduledTaskAction -Execute $TargetExe
+$Principal = New-ScheduledTaskPrincipal -UserId $TargetUser -LogonType Interactive -RunLevel Highest
+$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 
-Start-Process -FilePath "schtasks.exe" -ArgumentList "/Create /TN $TaskName /TR `"`"$TargetExe`"`" /SC ONCE /ST 00:00 /IT /RU $TargetUser /RP `"`" /F /RL HIGHEST" -Wait -NoNewWindow
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Principal $Principal -Settings $Settings -Force | Out-Null
 
-Start-Process -FilePath "schtasks.exe" -ArgumentList "/Run /TN $TaskName" -Wait -NoNewWindow
+Write-Host "Starting application in $TargetUser's session..."
+Start-ScheduledTask -TaskName $TaskName
 
-Start-Sleep -Seconds 5
-Start-Process -FilePath "schtasks.exe" -ArgumentList "/Delete /TN $TaskName /F" -Wait -NoNewWindow
+Start-Sleep -Seconds 3
 
-Write-Host "Launch command sent."
+Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+
+Write-Host "Launch command sent for user: $TargetUser"
