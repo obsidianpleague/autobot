@@ -22,12 +22,11 @@ if (Test-Path $AppPath_System) {
 }
 
 if (-not $TargetExe) {
-    Write-Error "Application not found in system or any user profile."
+    Write-Output "FAIL:Application not found"
     return
 }
 
 $TargetUser = $null
-$SessionId = $null
 
 try {
     $quser = quser 2>&1
@@ -41,28 +40,34 @@ try {
 } catch {}
 
 if (-not $TargetUser) {
-    Write-Warning "No active user session found. Cannot launch GUI app."
+    Write-Output "FAIL:No active user session"
     return
 }
-
-Write-Host "Detected Active User: $TargetUser"
-Write-Host "Application Path: $TargetExe"
 
 $TaskName = "AutoBot_Remote_Launch"
 
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 
-$Action = New-ScheduledTaskAction -Execute $TargetExe
+$WrapperPath = "C:\Windows\Temp\AutoBot_Launcher.ps1"
+
+@"
+Start-Process -FilePath "$TargetExe"
+Start-Sleep -Seconds 10
+Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+"@ | Set-Content -Path $WrapperPath -Force
+
+$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$WrapperPath`""
 $Principal = New-ScheduledTaskPrincipal -UserId $TargetUser -LogonType Interactive -RunLevel Highest
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 
 Register-ScheduledTask -TaskName $TaskName -Action $Action -Principal $Principal -Settings $Settings -Force | Out-Null
 
-Write-Host "Starting application in $TargetUser's session..."
 Start-ScheduledTask -TaskName $TaskName
 
-Start-Sleep -Seconds 3
+Start-Sleep -Seconds 15
 
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+Remove-Item -Path $WrapperPath -Force -ErrorAction SilentlyContinue
 
-Write-Host "Launch command sent for user: $TargetUser"
+Write-Output "OK"
